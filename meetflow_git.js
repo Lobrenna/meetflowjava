@@ -24,6 +24,9 @@
   // **Declare screenStream as a global variable**
   let screenStream = null;
 
+  // Andre globale variabler...
+  let transcriptionElement = null;
+
   // Build specific endpoints based on base URL (ws_url will be updated later)
   let ws_url = ''; // Will be constructed after getting user settings
   const initialize_session_url = `${base_url}/initialize_session`;
@@ -633,7 +636,7 @@
       referatText = "";
 
       // Legg til spinner i transcription-elementet
-      const transcriptionElement = document.getElementById("par_transcription");
+      transcriptionElement = document.getElementById("par_transcription");
       if (transcriptionElement) {
           transcriptionElement.innerHTML = `
               <div class="spinner-container">
@@ -941,7 +944,7 @@
             referatLength: referatText.length
         });
 
-        const transcriptionElement = document.getElementById("par_transcription");
+        transcriptionElement = document.getElementById("par_transcription");
         if (transcriptionElement) {
             const content = finalTranscriptionText.trim() !== "" 
                 ? finalTranscriptionText 
@@ -1259,7 +1262,8 @@
       stopLink.addEventListener("click", stopRecording);
     }
 
-    //const transcriptionElement = document.getElementById("par_transcription");
+    transcriptionElement = document.getElementById("par_transcription");
+
     if (transcriptionElement) {
         // Når brukeren begynner å scrolle
         transcriptionElement.addEventListener('scroll', () => {
