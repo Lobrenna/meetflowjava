@@ -1,4 +1,4 @@
-
+<script>
   // Define base URL
   const base_url = "https://meetflow2-288093225591.europe-west1.run.app";
 
@@ -11,7 +11,6 @@
     });
   }
 
-  
   let clientId = generateUUID(); // Changed from const to let
   console.log('Generated clientId:', clientId);
 
@@ -338,12 +337,6 @@
   async function processMessage(message) {
       if (!isRecording) return;
 
-      // Fjern spinner hvis dette er første melding
-      const transcriptionElement = document.getElementById("par_transcription");
-      if (transcriptionElement && transcriptionElement.querySelector('.spinner-container')) {
-          transcriptionElement.innerHTML = "";
-      }
-
       // Validate message type
       if (typeof message !== 'string') {
           console.error(`Expected message to be a string but received type: ${typeof message}`);
@@ -448,7 +441,13 @@
   // Send summary request
   async function sendReferatRequest() {
     const referatkode = referatkode_mapping[summaryType] || 2;
+
+    // Bruk transcriptionText hvis tilgjengelig, ellers bruk interimTranscriptionText
     const transcription = transcriptionText.trim() !== "" ? transcriptionText : interimTranscriptionText;
+
+    console.log(`Sending referat for client_id: ${clientId}`);
+    console.log(`Transcription text length: ${transcription.length}`);
+    console.log(`Transcription text: ${transcription}`);
 
     if (transcription.trim() === "") {
         alert("No transcription available to generate summary.");
@@ -458,19 +457,14 @@
     const payload = {
         client_id: clientId,
         referatkode: referatkode,
-        transcription_text: transcription,
+        transcription_text: transcription, // Inkluder transkripsjonen her
         additional_context_path: null
     };
 
-    // Sett ventebeskjed med spinner
+    // Sett ventebeskjeden direkte
     const summaryElement = document.getElementById("par_summary");
     if (summaryElement) {
-        summaryElement.innerHTML = `
-            <div class="spinner-container">
-                <div class="summary-spinner"></div>
-                <span>Generating summary and takeaways, please wait...</span>
-            </div>
-        `;
+        summaryElement.innerHTML = "Generating summary and takeaways, please wait...";
     }
 
     try {
@@ -590,123 +584,6 @@
   }
 
 
-// Check user's active plan and set configurations
-  async function checkUserPlan() {
-    // console.log('Checking if user is logged in');
-    try {
-      const member = await window.$memberstackDom.getCurrentMember();
-
-      if (member.data) {
-        // Get user settings from custom fields
-        const savedSettings = member.data.customFields || {};
-
-        // Log the fetched settings
-        console.log('Fetched user settings from Memberstack:', savedSettings);
-
-        // Get languages
-        languages = [];
-        const language1 = savedSettings['language1'];
-        const language2 = savedSettings['language2'];
-        const language3 = savedSettings['language3'];
-        if (language1) languages.push(language1);
-        if (language2) languages.push(language2);
-        if (language3) languages.push(language3);
-
-        // Log languages
-        // console.log('Languages before ensuring uniqueness:', languages);
-
-        // Ensure languages are unique
-        languages = ensureUniqueLanguages(languages);
-
-        // Log languages after ensuring uniqueness
-        // console.log('Languages after ensuring uniqueness:', languages);
-
-        if (languages.length === 0) {
-          alert("Please select at least one language in your settings.");
-          return null;
-        }
-        primary_language = languages[0];
-
-        // Initialize session URL will be used later
-        // Get transcription_text from existing transcriptionText
-
-        // Get mic, audio, summary from saved settings (store device labels)
-        selectedMicDeviceName = savedSettings['mic'] || '';
-        selectedAudioDeviceName = savedSettings['audio'] || '';
-        summaryType = savedSettings['summary'] || ''; // Set summaryType as global variable
-
-        // Log mic, audio, and summary variables
-        console.log('Selected mic device name:', selectedMicDeviceName);
-        console.log('Selected audio device name:', selectedAudioDeviceName);
-        console.log('Selected summary type:', summaryType);
-
-        if (!summaryType) {
-          alert("Please select a summary type in your settings.");
-          return null;
-        }
-
-        // Check if user has any active planConnections
-        if (member.data.planConnections && member.data.planConnections.length > 0) {
-          // Find the first active plan
-          const activePlan = member.data.planConnections.find(plan => plan.active && plan.status === 'ACTIVE');
-
-          if (activePlan) {
-            const planId = activePlan.planId;
-            // console.log(`Active plan ID: ${planId}`);
-
-            // Handle specific plans that require upgrading
-            if (planId === 'pln_upgrade-w1c0122') {
-              console.log("Upgrade warning");
-              alert("Sorry, but you have used up all credits in your Demo plan. Please upgrade to continue.");
-              window.location.href = '/upgrade';
-              return null;
-            }
-
-            // Determine which plan type is active
-            let activePlanType = null;
-            for (const [type, ids] of Object.entries(planTypes)) {
-              if (ids.includes(planId)) {
-                activePlanType = type;
-                break;
-              }
-            }
-
-            if (activePlanType) {
-              // Set referatkode_mapping and summaryOptions based on plan type
-              referatkode_mapping = planConfigurations[activePlanType].referatkode_mapping;
-              summaryOptions = planConfigurations[activePlanType].summaryOptions;
-
-              // console.log(`Identified plan type: ${activePlanType}`);
-              // console.log('Referatkode Mapping:', referatkode_mapping);
-              // console.log('Summary Options:', summaryOptions);
-
-              // Check if the selected summaryType is valid for the plan
-              if (!summaryOptions.includes(summaryType)) {
-                alert(`The selected summary type "${summaryType}" is not available for your plan.`);
-                return null;
-              }
-
-              return activePlanType;
-            } else {
-              console.error(`No plan type found for planId: ${planId}`);
-            }
-          }
-        }
-
-        // If no active plan is found
-        alert("No active plan found. Please contact support.");
-        return null;
-      } else {
-        console.log('No user found');
-        alert("You must be logged in to use this feature");
-        return null;
-      }
-    } catch (error) {
-      console.error('Error checking user plan:', error);
-      return null;
-    }
-  }
-
 
   // Function to get screen stream
   async function getScreenStream() {
@@ -742,17 +619,6 @@
       finalTranscriptionText = "";
       suggestionsText = "";
       referatText = "";
-
-      // Vis spinner i transcription-elementet
-      const transcriptionElement = document.getElementById("par_transcription");
-      if (transcriptionElement) {
-          transcriptionElement.innerHTML = `
-              <div class="spinner-container">
-                  <div class="summary-spinner"></div>
-                  <span>Initializing recording, please wait for transcription...</span>
-              </div>
-          `;
-      }
 
       // Generate a new clientId for each new stream
       clientId = generateUUID();
@@ -1052,7 +918,7 @@
             referatLength: referatText.length
         });
 
-        let transcriptionElement = document.getElementById("par_transcription");
+        const transcriptionElement = document.getElementById("par_transcription");
         if (transcriptionElement) {
             const content = finalTranscriptionText.trim() !== "" 
                 ? finalTranscriptionText 
@@ -1384,35 +1250,5 @@
             }, 10000); // Gjenoppta auto-scroll etter 10 sekunder med inaktivitet
         });
     }
-
-    // Legg til CSS for spinner-animasjonen (én gang)
-    if (!document.querySelector('#spinner-style')) {
-        const style = document.createElement('style');
-        style.id = 'spinner-style';
-        style.textContent = `
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            .summary-spinner {
-                display: inline-block;
-                width: 20px;
-                height: 20px;
-                border: 3px solid rgba(0, 0, 0, 0.1);
-                border-radius: 50%;
-                border-top-color: #000;
-                animation: spin 1s ease-in-out infinite;
-                margin-right: 10px;
-                vertical-align: middle;
-            }
-            .spinner-container {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                margin-bottom: 20px;
-            }
-        `;
-        document.head.appendChild(style);
-    }
   };
-
+</script>
