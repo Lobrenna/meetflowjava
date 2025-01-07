@@ -634,7 +634,7 @@
       referatText = "";
 
       // Legg til spinner i transcription-elementet
-      const transcriptionElement = document.getElementById("par_transcription");
+      transcriptionElement = document.getElementById("par_transcription");
       if (transcriptionElement) {
           transcriptionElement.innerHTML = `
               <div class="spinner-container">
