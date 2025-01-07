@@ -597,7 +597,6 @@
     }
   }
 
-
   // Function to get screen stream
   async function getScreenStream() {
       try {
@@ -1260,7 +1259,7 @@
       stopLink.addEventListener("click", stopRecording);
     }
 
-    const transcriptionElement = document.getElementById("par_transcription");
+    //const transcriptionElement = document.getElementById("par_transcription");
     if (transcriptionElement) {
         // Når brukeren begynner å scrolle
         transcriptionElement.addEventListener('scroll', () => {
