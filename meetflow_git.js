@@ -1,4 +1,3 @@
-<script>
   // Define base URL
   const base_url = "https://meetflow2-288093225591.europe-west1.run.app";
 
@@ -1306,4 +1305,3 @@
         document.head.appendChild(style);
     }
   };
-</script>
