@@ -378,6 +378,14 @@
               break;
 
           case 'FINAL':
+              // Fjern spinner hvis dette er første transkripsjon
+              if (finalTranscriptionText.length === 0) {
+                  const transcriptionElement = document.getElementById("par_transcription");
+                  if (transcriptionElement) {
+                      transcriptionElement.innerHTML = "";
+                  }
+              }
+              
               const newLength = messageContent.length;
               
               // Calculate average transcription length
@@ -402,6 +410,14 @@
               break;
 
           case 'INTERIM':
+              // Fjern spinner hvis dette er første transkripsjon
+              if (interimTranscriptionText.length === 0) {
+                  const transcriptionElement = document.getElementById("par_transcription");
+                  if (transcriptionElement) {
+                      transcriptionElement.innerHTML = "";
+                  }
+              }
+              
               interimTranscriptionText = messageContent;
               const currentLength = messageContent.length;
               updateMeterIndicator(currentLength);
@@ -441,13 +457,7 @@
   // Send summary request
   async function sendReferatRequest() {
     const referatkode = referatkode_mapping[summaryType] || 2;
-
-    // Bruk transcriptionText hvis tilgjengelig, ellers bruk interimTranscriptionText
     const transcription = transcriptionText.trim() !== "" ? transcriptionText : interimTranscriptionText;
-
-    console.log(`Sending referat for client_id: ${clientId}`);
-    console.log(`Transcription text length: ${transcription.length}`);
-    console.log(`Transcription text: ${transcription}`);
 
     if (transcription.trim() === "") {
         alert("No transcription available to generate summary.");
@@ -457,14 +467,19 @@
     const payload = {
         client_id: clientId,
         referatkode: referatkode,
-        transcription_text: transcription, // Inkluder transkripsjonen her
+        transcription_text: transcription,
         additional_context_path: null
     };
 
-    // Sett ventebeskjeden direkte
+    // Sett ventebeskjed med spinner
     const summaryElement = document.getElementById("par_summary");
     if (summaryElement) {
-        summaryElement.innerHTML = "Generating summary and takeaways, please wait...";
+        summaryElement.innerHTML = `
+            <div class="spinner-container">
+                <div class="summary-spinner"></div>
+                <span>Generating summary and takeaways, please wait...</span>
+            </div>
+        `;
     }
 
     try {
@@ -584,7 +599,6 @@
   }
 
 
-
   // Function to get screen stream
   async function getScreenStream() {
       try {
@@ -619,6 +633,17 @@
       finalTranscriptionText = "";
       suggestionsText = "";
       referatText = "";
+
+      // Legg til spinner i transcription-elementet
+      const transcriptionElement = document.getElementById("par_transcription");
+      if (transcriptionElement) {
+          transcriptionElement.innerHTML = `
+              <div class="spinner-container">
+                  <div class="summary-spinner"></div>
+                  <span>Waiting for first transcription...</span>
+              </div>
+          `;
+      }
 
       // Generate a new clientId for each new stream
       clientId = generateUUID();
@@ -1236,7 +1261,7 @@
       stopLink.addEventListener("click", stopRecording);
     }
 
-    const transcriptionElement = document.getElementById("par_transcription");
+    //const transcriptionElement = document.getElementById("par_transcription");
     if (transcriptionElement) {
         // Når brukeren begynner å scrolle
         transcriptionElement.addEventListener('scroll', () => {
@@ -1249,6 +1274,36 @@
                 userScrolling = false;
             }, 10000); // Gjenoppta auto-scroll etter 10 sekunder med inaktivitet
         });
+    }
+
+    // Legg til CSS for spinner-animasjonen (én gang)
+    if (!document.querySelector('#spinner-style')) {
+        const style = document.createElement('style');
+        style.id = 'spinner-style';
+        style.textContent = `
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            .summary-spinner {
+                display: inline-block;
+                width: 20px;
+                height: 20px;
+                border: 3px solid rgba(0, 0, 0, 0.1);
+                border-radius: 50%;
+                border-top-color: #000;
+                animation: spin 1s ease-in-out infinite;
+                margin-right: 10px;
+                vertical-align: middle;
+            }
+            .spinner-container {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 20px;
+            }
+        `;
+        document.head.appendChild(style);
     }
   };
 </script>
