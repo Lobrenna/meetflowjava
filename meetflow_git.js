@@ -639,7 +639,7 @@ async function startRecording() {
 
   const summaryElement = document.getElementById("par_summary");
   const runElement = document.getElementById("par_run");
-  const transcriptionElement = document.getElementById("par_transcription");
+  transcriptionElement = document.getElementById("par_transcription");
   const suggestionsElement = document.getElementById("par_suggestions");
 
   if (summaryElement) summaryElement.innerHTML = "";
