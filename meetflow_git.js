@@ -221,8 +221,8 @@ function updateTrafficIndicator(messageSize) {
     const waveSymbols = ['▁','▂','▃','▄','▅','▆'];
   
     // 1) Velg et tilfeldig antall «kolonner» (3–8) for å variere «bredden»
-    const minCols = 3;
-    const maxCols = 8;
+    const minCols = 2;
+    const maxCols = 7;
     const columns = minCols + Math.floor(Math.random() * (maxCols - minCols + 1));
   
     // 2) Bygg en streng der hver kolonne får et tilfeldig symbol
@@ -250,7 +250,7 @@ function updateMeterIndicator(currentLength) {
     const percentage = (currentLength / adjustedMax) * 100;
     
     // Her setter vi max lengde til 67
-    const maxMeterLength = 67;
+    const maxMeterLength = 64;
   
     // Utregning av faktisk meterLength:
     const meterLength = Math.floor((percentage / 100) * maxMeterLength);
