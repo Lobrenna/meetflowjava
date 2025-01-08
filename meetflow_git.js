@@ -603,6 +603,162 @@ async function getScreenStream() {
   }
 }
 
+
+
+// Initiate MediaRecorder with selected devices
+async function initiateMediaRecording() {
+    try {
+        mediaRecorder = null;
+        audioContext = null;
+  
+        const payload = { client_id: clientId };
+        const response = await fetch(`${base_url}/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+  
+        const data = await response.json();
+  
+        if (data.status === 'running') {
+            console.log('Recording started.');
+  
+            let streams = [];
+  
+            if (screenStream) {
+                streams.push(screenStream);
+                console.log('Using screen stream obtained earlier.');
+            } else {
+                console.warn('No screen stream available.');
+            }
+  
+            if (selectedMicDeviceName) {
+                const micDeviceId = await getDeviceIdByLabel(selectedMicDeviceName);
+                if (micDeviceId) {
+                    try {
+                        const micStream = await navigator.mediaDevices.getUserMedia({
+                            audio: {
+                                deviceId: { exact: micDeviceId },
+                                echoCancellation: false,
+                                noiseSuppression: false,
+                                autoGainControl: false
+                            }
+                        });
+                        streams.push(micStream);
+                        activeStreams.push(micStream);
+                        console.log('Microphone stream obtained:', selectedMicDeviceName);
+                    } catch (err) {
+                        console.error('Could not access selected microphone', err);
+                    }
+                } else {
+                    console.warn(`Could not find device ID for microphone: ${selectedMicDeviceName}`);
+                }
+            }
+  
+            if (selectedAudioDeviceName && selectedAudioDeviceName.toLowerCase().includes('blackhole')) {
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const audioDevices = devices.filter(device => device.kind === 'audioinput');
+                    const blackholeDevice = audioDevices.find(d => d.label === selectedAudioDeviceName);
+  
+                    if (blackholeDevice) {
+                        const audioStream = await navigator.mediaDevices.getUserMedia({
+                            audio: {
+                                deviceId: { exact: blackholeDevice.deviceId },
+                                echoCancellation: false,
+                                noiseSuppression: false,
+                                autoGainControl: false
+                            }
+                        });
+                        streams.push(audioStream);
+                        activeStreams.push(audioStream);
+                        console.log('BlackHole audio stream obtained:', blackholeDevice.label);
+                    } else {
+                        console.warn('Selected BlackHole device not found in available devices');
+                    }
+                } catch (err) {
+                    console.error('Could not access BlackHole device:', err);
+                }
+            }
+  
+            if (streams.length === 0) {
+                try {
+                    const defaultStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    streams.push(defaultStream);
+                    activeStreams.push(defaultStream);
+                    console.log('Default microphone stream obtained.');
+                } catch (err) {
+                    console.error('Could not access default microphone', err);
+                    alert('Could not access microphone. Please check your device settings and permissions.');
+                    return false;
+                }
+            }
+  
+            if (streams.length > 0) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                await audioContext.resume();
+  
+                const destination = audioContext.createMediaStreamDestination();
+                for (const stream of streams) {
+                    const sourceNode = audioContext.createMediaStreamSource(stream);
+                    const gainNode = audioContext.createGain();
+                    gainNode.gain.value = 1.0;
+                    sourceNode.connect(gainNode).connect(destination);
+                }
+  
+                try {
+                    mediaRecorder = new MediaRecorder(destination.stream, {
+                        mimeType: 'audio/webm;codecs=opus'
+                    });
+                    console.log('MediaRecorder created with MIME type:', mediaRecorder.mimeType);
+                } catch (e) {
+                    console.error('Could not create MediaRecorder:', e);
+                    alert('Could not start recording. MediaRecorder not supported or failed to initialize.');
+                    return false;
+                }
+  
+                mediaRecorder.ondataavailable = async (event) => {
+                    if (event.data.size > 0 && websocket && websocket.readyState === WebSocket.OPEN) {
+                        try {
+                            websocket.send(event.data);
+                            console.log('Sent audio chunk, size:', event.data.size);
+                        } catch (error) {
+                            console.error('Error sending audio data:', error);
+                        }
+                    } else {
+                        console.warn('WebSocket not ready or empty data. Size:', event.data.size, 'WebSocket state:', websocket?.readyState);
+                    }
+                };
+  
+                mediaRecorder.onstart = () => {
+                    console.log('MediaRecorder started.');
+                };
+  
+                mediaRecorder.onerror = (event) => {
+                    console.error('MediaRecorder error:', event.error);
+                };
+  
+                mediaRecorder.start(100);
+                console.log('MediaRecorder started with 100ms timeslice');
+  
+                return true;
+            } else {
+                console.error('No audio streams available for recording.');
+                alert('No audio streams available for recording.');
+                return false;
+            }
+  
+        } else {
+            console.error('Could not start recording');
+            return false;
+        }
+    } catch (error) {
+        console.error('Error in initiateMediaRecording:', error);
+        throw error;
+    }
+  }
+
+
 async function startRecording() {
     console.log("Start recording triggered...");
   
