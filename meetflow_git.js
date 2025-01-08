@@ -234,30 +234,28 @@ function amplitudeIndexFromLength(msgLen) {
   
     // Finn brøk [0..1], gang opp til waveSymbols.length - 1 (dvs. 5)
     const amplitude = Math.floor((clampedLen / maxMsgLen) * (waveSymbols.length - 1));
-    return amplitude; // 0..5
+    return amplitude; // en verdi 0..5
   }
 
   function updateTrafficIndicator(messageSize) {
-    // 1) Regn ut amplitude-indeks i [0..5]
+    // 1) Finn amplitude i [0..5]
     const amplitudeIdx = amplitudeIndexFromLength(messageSize);
   
-    // 2) Push kolonnen (amplitudeIdx) inn i waveLine
-    waveLine.push(amplitudeIdx);
-  
-    // 3) Fjern venstre kolonne hvis vi overskrider waveLineMaxLength (6)
-    if (waveLine.length > waveLineMaxLength) {
+    // 2) Legg inn kolonnen til høyre
+    if (waveLine.length >= waveLineMaxLength) {
+      // Fjern venstre kolonne (eldst)
       waveLine.shift();
     }
+    waveLine.push(amplitudeIdx);
   
-    // 4) Tegn waveLine
+    // 3) Konverter waveLine -> en streng av symboler
     const trafficElement = document.getElementById("text_stream");
     if (trafficElement) {
-      // Konverter hver amplitude i waveLine til sitt symbol
-      // og join dem sammen
       const symbolLine = waveLine.map(idx => waveSymbols[idx]).join('');
       trafficElement.textContent = symbolLine;
     }
   }
+  
 
   
 
@@ -283,7 +281,7 @@ function updateMeterIndicator(currentLength) {
   
   const meterElement = document.getElementById("text_meter");
   if (meterElement) {
-      meterElement.textContent = '_'.repeat(Math.min(120, Math.max(1, meterLength)));
+      meterElement.textContent = '▁'.repeat(Math.min(120, Math.max(1, meterLength)));
   }
 }
 
