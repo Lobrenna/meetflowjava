@@ -216,44 +216,52 @@ let maxFrontendReconnectRetries = 3;
 let frontendReconnectAttempts = 0;
 
 
-
-// Forenklet trafficIndicator
-// Forenklet trafficIndicator med tilfeldig valg av bølgesymbol og gjentakelser
+// Forenklet "wave" trafficIndicator som lager en tilfeldig kort linje av ulike blokksymboler
 function updateTrafficIndicator(messageSize) {
-    const waveSymbols = ['▁', '▂', '▃', '▄', '▅', '▆'];
-
-    // 1) Velg et tilfeldig symbol fra listen
-    const randIdx = Math.floor(Math.random() * waveSymbols.length);
-    const symbol = waveSymbols[randIdx];
-
-    // 2) Velg et tilfeldig antall gjentakelser (1–4) for å gi variasjon
-    const maxRepeats = 4;
-    const repeats = 1 + Math.floor(Math.random() * maxRepeats);
-
-    // 3) Generer streng: symbolet gjentatt 'repeats' ganger
-    const wave = symbol.repeat(repeats);
-
-    // 4) Oppdater DOM-elementet #text_stream
+    const waveSymbols = ['▁','▂','▃','▄','▅','▆'];
+  
+    // 1) Velg et tilfeldig antall «kolonner» (3–8) for å variere «bredden»
+    const minCols = 3;
+    const maxCols = 8;
+    const columns = minCols + Math.floor(Math.random() * (maxCols - minCols + 1));
+  
+    // 2) Bygg en streng der hver kolonne får et tilfeldig symbol
+    let waveLine = "";
+    for (let i = 0; i < columns; i++) {
+      const randIdx = Math.floor(Math.random() * waveSymbols.length);
+      waveLine += waveSymbols[randIdx];
+    }
+  
+    // 3) Oppdater DOM-elementet #text_stream
     const trafficElement = document.getElementById("text_stream");
     if (trafficElement) {
-        trafficElement.textContent = wave;
+      trafficElement.textContent = waveLine;
     }
-}
-
-
-// Oppdatert funksjon for meter-indikatoren med 150% av snitt som maks
-function updateMeterIndicator(currentLength) {
-  if (averageTranscriptionLength === 0) return;
-  
-  const adjustedMax = averageTranscriptionLength * 1.5;
-  const percentage = (currentLength / adjustedMax) * 100;
-  const meterLength = Math.floor((percentage / 100) * 120);
-  
-  const meterElement = document.getElementById("text_meter");
-  if (meterElement) {
-      meterElement.textContent = '▁'.repeat(Math.min(120, Math.max(1, meterLength)));
   }
-}
+  
+
+
+// Oppdatert funksjon for meter-indikatoren med 150% av snitt som maks,
+// men makslengden i UI er nå 67 tegn.
+function updateMeterIndicator(currentLength) {
+    if (averageTranscriptionLength === 0) return;
+  
+    const adjustedMax = averageTranscriptionLength * 1.5;
+    const percentage = (currentLength / adjustedMax) * 100;
+    
+    // Her setter vi max lengde til 67
+    const maxMeterLength = 67;
+  
+    // Utregning av faktisk meterLength:
+    const meterLength = Math.floor((percentage / 100) * maxMeterLength);
+  
+    const meterElement = document.getElementById("text_meter");
+    if (meterElement) {
+      // Sørg for at vi alltid viser minst 1 tegn når meterLength > 0
+      meterElement.textContent = '▁'.repeat(Math.min(maxMeterLength, Math.max(1, meterLength)));
+    }
+  }
+  
 
 // Function to ensure unique languages
 function ensureUniqueLanguages(languages) {
