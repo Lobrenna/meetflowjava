@@ -1169,7 +1169,7 @@ window.onload = async () => {
     }
   }
 
-  updateWebflowUI();
+  // updateWebflowUI();
 
   const startLink = document.getElementById("link_start");
   const stopLink = document.getElementById("link_stop");
