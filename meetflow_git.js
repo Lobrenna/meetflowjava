@@ -708,6 +708,7 @@ async function startRecording() {
     }
   }
   
+  
 
 // Update UI
 function updateWebflowUI() {
