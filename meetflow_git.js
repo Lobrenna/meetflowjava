@@ -205,20 +205,18 @@ let receivedCharCount = 0;
 const CHAR_THRESHOLD = 250; // Antall tegn som tilsvarer 3 punktum
 const MAX_DOTS = 3; // Redusert fra 10 til 3 punktum
 
-// Forenklet trafikk-indikator funksjon
+// --- RECONNECT LOGIC ---
+// Sett antall ganger vi vil prøve å reconnecte før vi gir opp
+let maxFrontendReconnectRetries = 3;
+let frontendReconnectAttempts = 0;
+
 function updateTrafficIndicator(messageSize) {
   receivedCharCount += messageSize;
-  
-  // Beregn antall punktum (1-3) basert på mottatte tegn
   const dots = Math.max(1, Math.min(MAX_DOTS, Math.floor((receivedCharCount / CHAR_THRESHOLD) * MAX_DOTS)));
-  
-  // Oppdater visningen/
   const trafficElement = document.getElementById("text_stream");
   if (trafficElement) {
       trafficElement.textContent = '_'.repeat(dots);
   }
-  
-  // Reset telleren når vi når terskelen
   if (receivedCharCount >= CHAR_THRESHOLD) {
       receivedCharCount = 0;
   }
@@ -228,10 +226,9 @@ function updateTrafficIndicator(messageSize) {
 function updateMeterIndicator(currentLength) {
   if (averageTranscriptionLength === 0) return;
   
-  // Bruker 150% av snittet som maksverdi
   const adjustedMax = averageTranscriptionLength * 1.5;
   const percentage = (currentLength / adjustedMax) * 100;
-  const meterLength = Math.floor((percentage / 100) * 120); // Fortsatt max 120 tegn
+  const meterLength = Math.floor((percentage / 100) * 120);
   
   const meterElement = document.getElementById("text_meter");
   if (meterElement) {
@@ -287,6 +284,86 @@ async function initializeSession() {
   }
 }
 
+// --- RECONNECT LOGIC ---
+// Ny funksjon som forsøker å reconnecte WebSocket hvis isRecording = true
+async function attemptWebSocketReconnect() {
+  if (!isRecording) {
+    console.warn("No need to reconnect; not recording.");
+    return;
+  }
+  
+  if (frontendReconnectAttempts >= maxFrontendReconnectRetries) {
+    console.error("Max reconnect attempts reached. Stopping recording altogether.");
+    await stopRecording();
+    return;
+  }
+
+  frontendReconnectAttempts++;
+  console.log(`Attempting WebSocket reconnect #${frontendReconnectAttempts}...`);
+
+  try {
+    // Stopp opptak hvis mediaRecorder kjører
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop();
+      await new Promise(resolve => {
+        mediaRecorder.onstop = () => {
+          console.log('MediaRecorder stopped (for reconnect).');
+          resolve();
+        };
+      });
+    }
+    mediaRecorder = null;
+
+    // Stopp eventuelle streams
+    if (activeStreams.length > 0) {
+      activeStreams.forEach(stream => {
+        stream.getTracks().forEach(track => track.stop());
+      });
+      activeStreams = [];
+    }
+
+    // Lukk WebSocket hvis åpen
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+      console.log('Closing stale WebSocket before reconnect...');
+      isWebSocketClosing = true;
+      websocket.close();
+      await new Promise(resolve => {
+        websocket.onclose = () => {
+          console.log('Stale WebSocket closed for reconnect.');
+          resolve();
+        };
+      });
+    }
+
+    // Re-initialiser session (hvis nødvendig)
+    const sessionOk = await initializeSession();
+    if (!sessionOk) {
+      console.error('Could not re-initialize session during reconnect.');
+      await stopRecording();
+      return;
+    }
+
+    // Koble opp WebSocket på nytt
+    await new Promise((resolve, reject) => {
+      connectWebSocket(resolve, reject);
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    // Start mediaopptak igjen
+    const success = await initiateMediaRecording();
+    if (!success) {
+      throw new Error("Failed to re-initiate media recording after reconnect.");
+    }
+
+    console.log("WebSocket reconnected successfully. Resuming recording...");
+    // Nullstill antall reconnect-forsøk
+    frontendReconnectAttempts = 0;
+  } catch (err) {
+    console.error("Reconnection attempt failed:", err);
+    attemptWebSocketReconnect();
+  }
+}
+
 // Connect to WebSocket with retry mechanism
 async function connectWebSocket(onSuccess, onFailure) {
   if (websocket) {
@@ -305,16 +382,31 @@ async function connectWebSocket(onSuccess, onFailure) {
 
   websocket.onclose = (event) => {
       console.log('WebSocket disconnected', event);
+
+      // --- RECONNECT LOGIC ---
+      // Hvis nedkoblingen ikke var planlagt og vi fremdeles er i opptak, prøv reconnect
+      if (isRecording && !isWebSocketClosing) {
+        console.warn("Unexpected WebSocket closure while recording. Attempting reconnect...");
+        attemptWebSocketReconnect();
+      }
+
       if (onFailure) onFailure();
       isWebSocketClosing = false; // Reset flag when WebSocket is closed
   };
 
   websocket.onerror = (error) => {
       console.error('WebSocket error:', error);
+
+      // --- RECONNECT LOGIC ---
+      // Igjen, sjekk om vi er i opptak og at nedkobling ikke var planlagt
+      if (isRecording && !isWebSocketClosing) {
+        console.warn("WebSocket error occurred while recording. Attempting reconnect...");
+        attemptWebSocketReconnect();
+      }
+
       if (onFailure) onFailure();
   };
 
-  // Korrigert onmessage-handler
   websocket.onmessage = (event) => {
       console.log('WebSocket message received:', event);
       console.log('Type of event.data:', typeof event.data);
@@ -336,7 +428,6 @@ async function processMessage(message) {
       return;
   }
 
-  // Parse message type and content
   const separatorIndex = message.indexOf(':');
   if (separatorIndex === -1) {
       console.warn(`Invalid message format: ${message}`);
@@ -370,40 +461,42 @@ async function processMessage(message) {
           break;
 
       case 'FINAL':
-          
-          const newLength = messageContent.length;
-          transcriptionLengths.push(newLength);
-          if (transcriptionLengths.length > 10) transcriptionLengths.shift();
-          averageTranscriptionLength = transcriptionLengths.reduce((a, b) => a + b, 0) / transcriptionLengths.length;
+          {
+            const newLength = messageContent.length;
+            transcriptionLengths.push(newLength);
+            if (transcriptionLengths.length > 10) transcriptionLengths.shift();
+            averageTranscriptionLength = transcriptionLengths.reduce((a, b) => a + b, 0) / transcriptionLengths.length;
 
-          // Reset meter indicator immediately to '_'
-          const meterElement = document.getElementById("text_meter");
-          if (meterElement) {
-              meterElement.textContent = '_';
+            // Reset meter indicator
+            const meterElement = document.getElementById("text_meter");
+            if (meterElement) {
+                meterElement.textContent = '_';
+            }
+
+            finalTranscriptionText += messageContent + " ";
+            transcriptionText += messageContent + " ";
+            interimTranscriptionText = "";
+            lastTranscriptionLength = finalTranscriptionText.length;
+            console.log(`Updated finalTranscriptionText: ${finalTranscriptionText}`);
           }
-          
-          finalTranscriptionText += messageContent + " ";
-          transcriptionText += messageContent + " ";
-          interimTranscriptionText = "";
-          lastTranscriptionLength = finalTranscriptionText.length;
-          
-          console.log(`Updated finalTranscriptionText: ${finalTranscriptionText}`);
           break;
 
       case 'INTERIM':
-          
-          interimTranscriptionText = messageContent;
-          const currentLength = messageContent.length;
-          updateMeterIndicator(currentLength);
-          
-          console.log(`Updated interimTranscriptionText: ${interimTranscriptionText}`);
+          {
+            interimTranscriptionText = messageContent;
+            const currentLength = messageContent.length;
+            updateMeterIndicator(currentLength);
+
+            console.log(`Updated interimTranscriptionText: ${interimTranscriptionText}`);
+          }
           break;
 
       case 'GEMINI_FEEDBACK':
-          const currentTime = new Date().toLocaleTimeString();
-          suggestionsText = `______\nTime: ${currentTime}\n${messageContent}\n\n${suggestionsText}`;
-          
-          console.log(`Updated suggestionsText: ${suggestionsText}`);
+          {
+            const currentTime = new Date().toLocaleTimeString();
+            suggestionsText = `______\nTime: ${currentTime}\n${messageContent}\n\n${suggestionsText}`;
+            console.log(`Updated suggestionsText: ${suggestionsText}`);
+          }
           break;
 
       case 'ERROR':
@@ -500,11 +593,9 @@ async function stopRecording() {
   isRecording = false;
   
   try {
-      // 1. Stoppe MediaRecorder hvis den er aktiv
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
           console.log('Stopping MediaRecorder...');
           mediaRecorder.stop();
-          
           await new Promise((resolve) => {
               mediaRecorder.onstop = () => {
                   console.log('MediaRecorder stopped.');
@@ -513,7 +604,6 @@ async function stopRecording() {
           });
       }
       
-      // 2. Stopp alle aktive media streams
       if (activeStreams.length > 0) {
           console.log('Stopping all active media streams...');
           activeStreams.forEach(stream => {
@@ -523,7 +613,6 @@ async function stopRecording() {
           console.log('All media streams stopped.');
       }
       
-      // 3. Send referat request og vent på respons
       console.log('Sending referat request...');
       await sendReferatRequest();
       console.log('Referat request completed.');
@@ -531,7 +620,6 @@ async function stopRecording() {
   } catch (error) {
       console.error('Error during stopRecording:', error);
   } finally {
-      // 4. Lukke WebSocket
       try {
           if (websocket && websocket.readyState === WebSocket.OPEN && !isWebSocketClosing) {
               console.log('Closing WebSocket connection...');
@@ -549,7 +637,6 @@ async function stopRecording() {
           console.error('Error closing WebSocket:', wsError);
       }
       
-      // 5. Oppdatere UI knapper
       const startLink = document.getElementById("link_start");
       const stopLink = document.getElementById("link_stop");
       
@@ -567,7 +654,6 @@ async function stopRecording() {
   }
 }
 
-// Function to get screen stream
 async function getScreenStream() {
   try {
       if (screenStream) {
@@ -628,7 +714,6 @@ async function startRecording() {
   
     if (summaryElement) summaryElement.innerHTML = "";
     if (runElement) runElement.innerHTML = "";
-    // if (transcriptionElement) transcriptionElement.innerHTML = "";
     if (suggestionsElement) suggestionsElement.innerHTML = "";
   
     const currentStatus = await updateStatus();
@@ -690,8 +775,7 @@ async function startRecording() {
         stopLink.style.pointerEvents = "auto";
         stopLink.style.opacity = "1";
     }
-  }
-  
+}
 
 // Function to find deviceId by label
 async function getDeviceIdByLabel(label) {
@@ -706,7 +790,6 @@ async function getDeviceIdByLabel(label) {
   }
 }
 
-// Initiate MediaRecorder with selected devices
 async function initiateMediaRecording() {
   try {
       mediaRecorder = null;
@@ -859,27 +942,14 @@ async function initiateMediaRecording() {
   }
 }
 
-// Update UI
 function updateWebflowUI() {
     try {
-        // console.log('Updating UI with:', {
-        //     finalTranscriptionLength: finalTranscriptionText.length,
-        //     interimTranscriptionLength: interimTranscriptionText.length,
-        //     suggestionsLength: suggestionsText.length,
-        //     referatLength: referatText.length
-        // });
-  
-        // ───────────────────────────────────────────────────
-        // 1) par_transcription: Vis spinner hvis vi ikke har tekst
-        // ───────────────────────────────────────────────────
         transcriptionElement = document.getElementById("par_transcription");
         if (transcriptionElement) {
-            // Har vi mottatt noe tekst i det hele tatt?
             const hasFinalText = finalTranscriptionText.trim() !== "";
             const hasInterimOrMainText = transcriptionText.trim() !== "";
-  
+
             if (!hasFinalText && !hasInterimOrMainText) {
-                // Ingen data mottatt => behold spinneren
                 transcriptionElement.innerHTML = `
                     <div class="spinner-container">
                         <div class="summary-spinner"></div>
@@ -887,14 +957,12 @@ function updateWebflowUI() {
                     </div>
                 `;
             } else {
-                // Vi har data => fjern spinner og vis tekst
                 const content = hasFinalText
                     ? finalTranscriptionText
-                    : transcriptionText; // Kan være interim eller annen tekst
-  
+                    : transcriptionText;
+
                 transcriptionElement.innerHTML = marked.parse(content) + "<div style='margin-bottom: 2rem'></div>";
-  
-                // Auto-scroll til bunnen hvis brukeren ikke selv scroller
+
                 if (!userScrolling) {
                     transcriptionElement.scrollTop = transcriptionElement.scrollHeight;
                 }
@@ -902,10 +970,7 @@ function updateWebflowUI() {
         } else {
             console.warn('Transcription element not found');
         }
-  
-        // ───────────────────────────────────────────────────
-        // 2) par_run: Viser interim data
-        // ───────────────────────────────────────────────────
+
         const runElement = document.getElementById("par_run");
         if (runElement) {
             runElement.innerHTML = interimTranscriptionText
@@ -914,30 +979,21 @@ function updateWebflowUI() {
         } else {
             console.warn('Run element not found');
         }
-  
-        // ───────────────────────────────────────────────────
-        // 3) par_suggestions: Viser feedback
-        // ───────────────────────────────────────────────────
+
         const suggestionsElement = document.getElementById("par_suggestions");
         if (suggestionsElement) {
             suggestionsElement.innerHTML = suggestionsText
               ? marked.parse(suggestionsText)
               : "Feedback suggestions are updated at regular intervals, please wait...";
         }
-  
-        // ───────────────────────────────────────────────────
-        // 4) par_summary: Viser endelig referat/rapport
-        // ───────────────────────────────────────────────────
+
         const summaryElement = document.getElementById("par_summary");
         if (summaryElement) {
             summaryElement.innerHTML = referatText
               ? marked.parse(referatText) + "<br><br><br><br><br>"
               : "";
         }
-  
-        // ───────────────────────────────────────────────────
-        // 5) Oppdater start/stop-lenker (knapper)
-        // ───────────────────────────────────────────────────
+
         const startLink = document.getElementById("link_start");
         const stopLink = document.getElementById("link_stop");
         if (startLink) {
@@ -951,10 +1007,8 @@ function updateWebflowUI() {
     } catch (error) {
         console.error('Error updating UI:', error);
     }
-  }
-  
+}
 
-// Stop recording
 async function stopRecording() {
   if (!isRecording) return;
   
@@ -1022,7 +1076,6 @@ async function stopRecording() {
   }
 }
 
-// Update status
 async function updateStatus() {
   try {
     const response = await fetch(status_url);
@@ -1041,7 +1094,6 @@ async function updateStatus() {
   }
 }
 
-// Function to set up device lists
 async function setupDeviceLists() {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -1052,12 +1104,10 @@ async function setupDeviceLists() {
   }
 }
 
-// Check if the device is mobile (iOS or Android)
 function isMobileDevice() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-// StartNewSession funksjon
 async function startNewSession() {
   console.log("Cloud limit reached. Continuing the same session.");
   const existingTranscription = finalTranscriptionText;
@@ -1122,30 +1172,25 @@ async function startNewSession() {
   }
 }
 
-
 function initializeUI() {
-    // 1) Sett start-knappen aktiv, stop-knappen inaktiv
     const startLink = document.getElementById("link_start");
     const stopLink = document.getElementById("link_stop");
     
     if (startLink) {
       startLink.style.pointerEvents = "auto";
-      startLink.style.opacity = "1";    // Aktiv
+      startLink.style.opacity = "1";    
     }
     if (stopLink) {
       stopLink.style.pointerEvents = "none";
-      stopLink.style.opacity = "0.3";   // Inaktiv
+      stopLink.style.opacity = "0.3";
     }
-  
-    // 2) Vis en passiv melding i par_transcription (IKKE spinner)
+
     transcriptionElement = document.getElementById("par_transcription");
     if (transcriptionElement) {
       transcriptionElement.innerHTML = "Click 'Start' to begin live transcription...";
     }
-  }
-  
+}
 
-// Event listeners when the window loads
 window.onload = async () => {
   console.log('Window loaded');
 
@@ -1192,8 +1237,6 @@ window.onload = async () => {
     }
   }
 
-  // updateWebflowUI();
-  // Kjør initializeUI for å sette korrekt start-/stop-tilstand
   initializeUI();
 
   const startLink = document.getElementById("link_start");
