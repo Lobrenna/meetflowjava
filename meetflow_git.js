@@ -215,26 +215,24 @@ MAX_DOTS = waveSymbols.length;  // 6
 let maxFrontendReconnectRetries = 3;
 let frontendReconnectAttempts = 0;
 
+
+
+// Forenklet trafficIndicator
 function updateTrafficIndicator(messageSize) {
-    // Øk global teller med antall mottatte tegn (samme som før)
-    receivedCharCount += messageSize;
+    // 1) Finn random symbol-index
+    const randIdx = Math.floor(Math.random() * waveSymbols.length);
   
-    // Beregn indeks i [0 .. (MAX_DOTS - 1)] basert på ratio av (receivedCharCount / CHAR_THRESHOLD).
-    // Eksempel: ved 50% av CHAR_THRESHOLD => index ~ 3 => waveSymbols[3] = '▄'
-    const ratio = receivedCharCount / CHAR_THRESHOLD; 
-    let index = Math.floor(ratio * MAX_DOTS);
-    if (index >= MAX_DOTS) index = MAX_DOTS - 1;  // clamp
+    // 2) Velg antall gjentakelser, f.eks. 1 til 3 (juster etter smak)
+    const maxRepeats = 3; 
+    const repeats = 1 + Math.floor(Math.random() * maxRepeats);
   
-    // Oppdater HTML-element
+    // 3) Lag streng med symbolet
+    const wave = waveSymbols[randIdx].repeat(repeats);
+  
+    // 4) Oppdater DOM
     const trafficElement = document.getElementById("text_stream");
     if (trafficElement) {
-      // F.eks. vis ÉTT symbol (index) eller symbolet repetert 1 gang
-      trafficElement.textContent = waveSymbols[index];
-    }
-  
-    // Nullstill mottaks-telleren om vi har passert terskelen
-    if (receivedCharCount >= CHAR_THRESHOLD) {
-      receivedCharCount = 0;
+      trafficElement.textContent = wave;
     }
   }
 
