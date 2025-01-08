@@ -218,23 +218,28 @@ let frontendReconnectAttempts = 0;
 
 
 // Forenklet trafficIndicator
+// Forenklet trafficIndicator med tilfeldig valg av bølgesymbol og gjentakelser
 function updateTrafficIndicator(messageSize) {
-    // 1) Finn random symbol-index
+    const waveSymbols = ['▁', '▂', '▃', '▄', '▅', '▆'];
+
+    // 1) Velg et tilfeldig symbol fra listen
     const randIdx = Math.floor(Math.random() * waveSymbols.length);
-  
-    // 2) Velg antall gjentakelser, f.eks. 1 til 3 (juster etter smak)
-    const maxRepeats = 4; 
+    const symbol = waveSymbols[randIdx];
+
+    // 2) Velg et tilfeldig antall gjentakelser (1–4) for å gi variasjon
+    const maxRepeats = 4;
     const repeats = 1 + Math.floor(Math.random() * maxRepeats);
-  
-    // 3) Lag streng med symbolet
-    const wave = waveSymbols[randIdx].repeat(repeats);
-  
-    // 4) Oppdater DOM
+
+    // 3) Generer streng: symbolet gjentatt 'repeats' ganger
+    const wave = symbol.repeat(repeats);
+
+    // 4) Oppdater DOM-elementet #text_stream
     const trafficElement = document.getElementById("text_stream");
     if (trafficElement) {
-      trafficElement.textContent = wave;
+        trafficElement.textContent = wave;
     }
-  }
+}
+
 
 // Oppdatert funksjon for meter-indikatoren med 150% av snitt som maks
 function updateMeterIndicator(currentLength) {
