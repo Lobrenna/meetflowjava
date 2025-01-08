@@ -25,7 +25,9 @@ let screenStream = null;
 
 
 // Ny global liste med bølgesymboler
-const waveSymbols = ["~", "≈", "∿", "〰"];
+// const waveSymbols = ["~", "≈", "∿", "〰"];
+const waveSymbols = ['▁', '▂', '▃', '▄', '▅', '▆'];
+
 
 // Teller for å velge neste bølgesymbol
 let waveIndex = 0;
