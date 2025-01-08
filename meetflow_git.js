@@ -1178,7 +1178,7 @@ async function startNewSession() {
       activeStreams = [];
   }
 
-  if (websocket && websocket.readyState === WebSocket.OPEN) {
+  if (!websocket || websocket.readyState === WebSocket.CLOSED || websocket.readyState === WebSocket.CLOSING) {
       console.log('Closing WebSocket connection...');
       isWebSocketClosing = true;
       websocket.close();
