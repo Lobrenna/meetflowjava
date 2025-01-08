@@ -444,18 +444,6 @@ async function connectWebSocket(onSuccess, onFailure) {
 // Global flag to prevent multiple WebSocket closures
 let isWebSocketClosing = false;
 
-
-// Asynkron funksjon for å håndtere reconnect etter cloud limit
-async function handleCloudLimitReconnect() {
-    console.log("Reconnecting after cloud limit...");
-    if (websocket && websocket.readyState !== WebSocket.OPEN) {
-        await startNewSession()
-    } else {
-        console.log('WebSocket already open. Skipping reconnect.');
-    }
-}
-
-
 // Updated processMessage function
 async function processMessage(message) {
   if (!isRecording) return;
@@ -491,8 +479,12 @@ async function processMessage(message) {
   // Handle different message types
   switch(messageType) {
       case 'CLOUD_LIMIT_REACHED':
-          console.log('Cloud limit reached, attempting reconnect...');
-          setTimeout(handleCloudLimitReconnect, 500); // Forsink reconnect litt
+          console.log('Cloud limit reached, starting new session');
+          try {
+              await startNewSession();
+          } catch (error) {
+              console.error('Error starting new session:', error);
+          }
           break;
 
       case 'FINAL':
@@ -1178,7 +1170,7 @@ async function startNewSession() {
       activeStreams = [];
   }
 
-  if (!websocket || websocket.readyState === WebSocket.CLOSED || websocket.readyState === WebSocket.CLOSING) {
+  if (websocket && websocket.readyState === WebSocket.OPEN) {
       console.log('Closing WebSocket connection...');
       isWebSocketClosing = true;
       websocket.close();
@@ -1335,5 +1327,4 @@ window.onload = async () => {
       `;
       document.head.appendChild(style);
   }
-
 };
