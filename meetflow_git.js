@@ -1212,6 +1212,18 @@ function initializeUI() {
       stopLink.style.opacity = "0.3";
     }
 
+      // 3) Nullstill text_stream
+    const textStreamEl = document.getElementById("text_stream");
+    if (textStreamEl) {
+        textStreamEl.textContent = "";
+    }
+
+    // 4) Nullstill text_meter
+    const textMeterEl = document.getElementById("text_meter");
+    if (textMeterEl) {
+        textMeterEl.textContent = "";
+    }
+
     transcriptionElement = document.getElementById("par_transcription");
     if (transcriptionElement) {
       transcriptionElement.innerHTML = "Click 'Start' to begin live transcription...";
