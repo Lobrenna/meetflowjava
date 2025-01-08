@@ -1327,4 +1327,12 @@ window.onload = async () => {
       `;
       document.head.appendChild(style);
   }
+
+    // Overvåk WebSocket status
+    setInterval(async () => { // Korrigert skrivefeil her
+        if (isRecording && (!websocket || websocket.readyState !== WebSocket.OPEN)) {
+            console.warn("WebSocket connection lost during recording. Attempting to restart session.");
+            await startNewSession();
+        }
+    }, 5000);
 };
