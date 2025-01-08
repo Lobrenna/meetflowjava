@@ -370,14 +370,6 @@ async function processMessage(message) {
           break;
 
       case 'FINAL':
-          // Fjern spinner hvis dette er første transkripsjon
-          if (finalTranscriptionText.length === 0) {
-              // (FJERNET const) -> bruker global:
-              transcriptionElement = document.getElementById("par_transcription");
-              if (transcriptionElement) {
-                  transcriptionElement.innerHTML = "";
-              }
-          }
           
           const newLength = messageContent.length;
           transcriptionLengths.push(newLength);
@@ -399,14 +391,6 @@ async function processMessage(message) {
           break;
 
       case 'INTERIM':
-          // Fjern spinner hvis dette er første transkripsjon
-          if (interimTranscriptionText.length === 0) {
-              // (FJERNET const) -> bruker global:
-              transcriptionElement = document.getElementById("par_transcription");
-              if (transcriptionElement) {
-                  transcriptionElement.innerHTML = "";
-              }
-          }
           
           interimTranscriptionText = messageContent;
           const currentLength = messageContent.length;
@@ -644,7 +628,7 @@ async function startRecording() {
   
     if (summaryElement) summaryElement.innerHTML = "";
     if (runElement) runElement.innerHTML = "";
-    if (transcriptionElement) transcriptionElement.innerHTML = "";
+    // if (transcriptionElement) transcriptionElement.innerHTML = "";
     if (suggestionsElement) suggestionsElement.innerHTML = "";
   
     const currentStatus = await updateStatus();
@@ -877,67 +861,98 @@ async function initiateMediaRecording() {
 
 // Update UI
 function updateWebflowUI() {
-  try {
-      console.log('Updating UI with:', {
-          finalTranscriptionLength: finalTranscriptionText.length,
-          interimTranscriptionLength: interimTranscriptionText.length,
-          suggestionsLength: suggestionsText.length,
-          referatLength: referatText.length
-      });
-
-      transcriptionElement = document.getElementById("par_transcription");
-      if (transcriptionElement) {
-          const content = finalTranscriptionText.trim() !== "" 
-              ? finalTranscriptionText 
-              : (transcriptionText.trim() !== "" 
-                  ? transcriptionText 
-                  : "Please wait for live transcription...");
-          transcriptionElement.innerHTML = marked.parse(content) + "<div style='margin-bottom: 2rem'></div>";
-          
-          if (!userScrolling) {
-              transcriptionElement.scrollTop = transcriptionElement.scrollHeight;
-          }
-      } else {
-          console.warn('Transcription element not found');
-      }
-
-      const runElement = document.getElementById("par_run");
-      if (runElement) {
-          runElement.innerHTML = interimTranscriptionText 
-            ? marked.parse(interimTranscriptionText) 
-            : "Interim transcription has not started yet...";
-      } else {
-          console.warn('Run element not found');
-      }
-
-      const suggestionsElement = document.getElementById("par_suggestions");
-      if (suggestionsElement) {
-          suggestionsElement.innerHTML = suggestionsText 
-            ? marked.parse(suggestionsText) 
-            : "Feedback suggestions are updated at regular intervals, please wait...";
-      }
-
-      const summaryElement = document.getElementById("par_summary");
-      if (summaryElement) {
-          summaryElement.innerHTML = referatText 
-            ? marked.parse(referatText) + "<br><br><br><br><br>" 
-            : "";
-      }
-
-      const startLink = document.getElementById("link_start");
-      const stopLink = document.getElementById("link_stop");
-      if (startLink) {
-          startLink.style.pointerEvents = isRecording ? "none" : "auto";
-          startLink.style.opacity = isRecording ? "0.3" : "1";
-      }
-      if (stopLink) {
-          stopLink.style.pointerEvents = !isRecording ? "none" : "auto";
-          stopLink.style.opacity = !isRecording ? "0.3" : "1";
-      }
-  } catch (error) {
-      console.error('Error updating UI:', error);
+    try {
+        // console.log('Updating UI with:', {
+        //     finalTranscriptionLength: finalTranscriptionText.length,
+        //     interimTranscriptionLength: interimTranscriptionText.length,
+        //     suggestionsLength: suggestionsText.length,
+        //     referatLength: referatText.length
+        // });
+  
+        // ───────────────────────────────────────────────────
+        // 1) par_transcription: Vis spinner hvis vi ikke har tekst
+        // ───────────────────────────────────────────────────
+        transcriptionElement = document.getElementById("par_transcription");
+        if (transcriptionElement) {
+            // Har vi mottatt noe tekst i det hele tatt?
+            const hasFinalText = finalTranscriptionText.trim() !== "";
+            const hasInterimOrMainText = transcriptionText.trim() !== "";
+  
+            if (!hasFinalText && !hasInterimOrMainText) {
+                // Ingen data mottatt => behold spinneren
+                transcriptionElement.innerHTML = `
+                    <div class="spinner-container">
+                        <div class="summary-spinner"></div>
+                        <span>Waiting for first transcription...</span>
+                    </div>
+                `;
+            } else {
+                // Vi har data => fjern spinner og vis tekst
+                const content = hasFinalText
+                    ? finalTranscriptionText
+                    : transcriptionText; // Kan være interim eller annen tekst
+  
+                transcriptionElement.innerHTML = marked.parse(content) + "<div style='margin-bottom: 2rem'></div>";
+  
+                // Auto-scroll til bunnen hvis brukeren ikke selv scroller
+                if (!userScrolling) {
+                    transcriptionElement.scrollTop = transcriptionElement.scrollHeight;
+                }
+            }
+        } else {
+            console.warn('Transcription element not found');
+        }
+  
+        // ───────────────────────────────────────────────────
+        // 2) par_run: Viser interim data
+        // ───────────────────────────────────────────────────
+        const runElement = document.getElementById("par_run");
+        if (runElement) {
+            runElement.innerHTML = interimTranscriptionText
+              ? marked.parse(interimTranscriptionText)
+              : "Interim transcription has not started yet...";
+        } else {
+            console.warn('Run element not found');
+        }
+  
+        // ───────────────────────────────────────────────────
+        // 3) par_suggestions: Viser feedback
+        // ───────────────────────────────────────────────────
+        const suggestionsElement = document.getElementById("par_suggestions");
+        if (suggestionsElement) {
+            suggestionsElement.innerHTML = suggestionsText
+              ? marked.parse(suggestionsText)
+              : "Feedback suggestions are updated at regular intervals, please wait...";
+        }
+  
+        // ───────────────────────────────────────────────────
+        // 4) par_summary: Viser endelig referat/rapport
+        // ───────────────────────────────────────────────────
+        const summaryElement = document.getElementById("par_summary");
+        if (summaryElement) {
+            summaryElement.innerHTML = referatText
+              ? marked.parse(referatText) + "<br><br><br><br><br>"
+              : "";
+        }
+  
+        // ───────────────────────────────────────────────────
+        // 5) Oppdater start/stop-lenker (knapper)
+        // ───────────────────────────────────────────────────
+        const startLink = document.getElementById("link_start");
+        const stopLink = document.getElementById("link_stop");
+        if (startLink) {
+            startLink.style.pointerEvents = isRecording ? "none" : "auto";
+            startLink.style.opacity = isRecording ? "0.3" : "1";
+        }
+        if (stopLink) {
+            stopLink.style.pointerEvents = !isRecording ? "none" : "auto";
+            stopLink.style.opacity = !isRecording ? "0.3" : "1";
+        }
+    } catch (error) {
+        console.error('Error updating UI:', error);
+    }
   }
-}
+  
 
 // Stop recording
 async function stopRecording() {
