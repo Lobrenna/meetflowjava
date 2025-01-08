@@ -29,8 +29,17 @@ let screenStream = null;
 const waveSymbols = ['▁', '▂', '▃', '▄', '▅', '▆'];
 
 
-// Teller for å velge neste bølgesymbol
-let waveIndex = 0;
+// Her lagrer vi amplitude-indekser for hver kolonne
+// (Hver entry i waveLine er et tall 0..5, som vi så 
+// oversetter til et symbol i waveSymbols.)
+let waveLine = [];
+
+// Maks “bredde” = 6 kolonner, 
+// siden vi har 6 ulike symbolhøyder
+const waveLineMaxLength = 6;
+
+// Juster “normalisering” for meldingsstørrelse (se amplitudeIndexFromLength).
+const maxMsgLen = 300; // typisk maks lengde du vil se på
 
 // Andre globale variabler...
 let transcriptionElement = null;
@@ -219,30 +228,36 @@ const MAX_DOTS = 3; // Redusert fra 10 til 3 punktum
 let maxFrontendReconnectRetries = 3;
 let frontendReconnectAttempts = 0;
 
+function amplitudeIndexFromLength(msgLen) {
+    // Avgrens meldingsstørrelsen til [0, maxMsgLen]
+    const clampedLen = Math.min(msgLen, maxMsgLen);
+  
+    // Finn brøk [0..1], gang opp til waveSymbols.length - 1 (dvs. 5)
+    const amplitude = Math.floor((clampedLen / maxMsgLen) * (waveSymbols.length - 1));
+    return amplitude; // 0..5
+  }
 
-function updateTrafficIndicator(messageSize) {
-    receivedCharCount += messageSize;
-
-    // Beregn antall "bølge-forekomster" (dots) basert på meldingens lengde
-    const dots = Math.max(1, Math.min(MAX_DOTS, Math.floor((receivedCharCount / CHAR_THRESHOLD) * MAX_DOTS)));
-
+  function updateTrafficIndicator(messageSize) {
+    // 1) Regn ut amplitude-indeks i [0..5]
+    const amplitudeIdx = amplitudeIndexFromLength(messageSize);
+  
+    // 2) Push kolonnen (amplitudeIdx) inn i waveLine
+    waveLine.push(amplitudeIdx);
+  
+    // 3) Fjern venstre kolonne hvis vi overskrider waveLineMaxLength (6)
+    if (waveLine.length > waveLineMaxLength) {
+      waveLine.shift();
+    }
+  
+    // 4) Tegn waveLine
     const trafficElement = document.getElementById("text_stream");
     if (trafficElement) {
-        // Øk waveIndex (slik at vi går til neste bølgesymbol ved hver melding)
-        waveIndex = (waveIndex + 1) % waveSymbols.length;
-
-        // Hent nåværende bølgesymbol 
-        const symbol = waveSymbols[waveIndex];
-
-        // Sett textContent til symbol gjentatt 'dots' ganger
-        trafficElement.textContent = symbol.repeat(dots);
+      // Konverter hver amplitude i waveLine til sitt symbol
+      // og join dem sammen
+      const symbolLine = waveLine.map(idx => waveSymbols[idx]).join('');
+      trafficElement.textContent = symbolLine;
     }
-
-    // Nullstill teller når vi når terskelen
-    if (receivedCharCount >= CHAR_THRESHOLD) {
-        receivedCharCount = 0;
-    }
-}
+  }
 
   
 
