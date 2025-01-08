@@ -223,7 +223,7 @@ function updateTrafficIndicator(messageSize) {
     const randIdx = Math.floor(Math.random() * waveSymbols.length);
   
     // 2) Velg antall gjentakelser, f.eks. 1 til 3 (juster etter smak)
-    const maxRepeats = 3; 
+    const maxRepeats = 4; 
     const repeats = 1 + Math.floor(Math.random() * maxRepeats);
   
     // 3) Lag streng med symbolet
@@ -246,7 +246,7 @@ function updateMeterIndicator(currentLength) {
   
   const meterElement = document.getElementById("text_meter");
   if (meterElement) {
-      meterElement.textContent = '_'.repeat(Math.min(120, Math.max(1, meterLength)));
+      meterElement.textContent = '▁'.repeat(Math.min(120, Math.max(1, meterLength)));
   }
 }
 
