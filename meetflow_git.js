@@ -203,7 +203,12 @@ let meterInterval;
 // Forenklet trafikk-indikator variabler
 let receivedCharCount = 0;
 const CHAR_THRESHOLD = 250; // Antall tegn som tilsvarer 3 punktum
-const MAX_DOTS = 3; // Redusert fra 10 til 3 punktum
+// 1) Sett opp symbol-array for "bølge"-indikator
+const waveSymbols = ['▁','▂','▃','▄','▅','▆'];
+
+// 2) Oppdater MAX_DOTS til å matche waveSymbols-lengden
+//    (slik at vi alltid har MAX_DOTS = 6 i dette tilfellet)
+MAX_DOTS = waveSymbols.length;  // 6
 
 // --- RECONNECT LOGIC ---
 // Sett antall ganger vi vil prøve å reconnecte før vi gir opp
@@ -211,16 +216,27 @@ let maxFrontendReconnectRetries = 3;
 let frontendReconnectAttempts = 0;
 
 function updateTrafficIndicator(messageSize) {
-  receivedCharCount += messageSize;
-  const dots = Math.max(1, Math.min(MAX_DOTS, Math.floor((receivedCharCount / CHAR_THRESHOLD) * MAX_DOTS)));
-  const trafficElement = document.getElementById("text_stream");
-  if (trafficElement) {
-      trafficElement.textContent = '_'.repeat(dots);
-  }
-  if (receivedCharCount >= CHAR_THRESHOLD) {
+    // Øk global teller med antall mottatte tegn (samme som før)
+    receivedCharCount += messageSize;
+  
+    // Beregn indeks i [0 .. (MAX_DOTS - 1)] basert på ratio av (receivedCharCount / CHAR_THRESHOLD).
+    // Eksempel: ved 50% av CHAR_THRESHOLD => index ~ 3 => waveSymbols[3] = '▄'
+    const ratio = receivedCharCount / CHAR_THRESHOLD; 
+    let index = Math.floor(ratio * MAX_DOTS);
+    if (index >= MAX_DOTS) index = MAX_DOTS - 1;  // clamp
+  
+    // Oppdater HTML-element
+    const trafficElement = document.getElementById("text_stream");
+    if (trafficElement) {
+      // F.eks. vis ÉTT symbol (index) eller symbolet repetert 1 gang
+      trafficElement.textContent = waveSymbols[index];
+    }
+  
+    // Nullstill mottaks-telleren om vi har passert terskelen
+    if (receivedCharCount >= CHAR_THRESHOLD) {
       receivedCharCount = 0;
+    }
   }
-}
 
 // Oppdatert funksjon for meter-indikatoren med 150% av snitt som maks
 function updateMeterIndicator(currentLength) {
