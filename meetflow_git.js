@@ -23,6 +23,13 @@ let summaryType = ''; // Will be set from Memberstack
 // **Declare screenStream as a global variable**
 let screenStream = null;
 
+
+// Ny global liste med bølgesymboler
+const waveSymbols = ["~", "≈", "∿", "〰"];
+
+// Teller for å velge neste bølgesymbol
+let waveIndex = 0;
+
 // Andre globale variabler...
 let transcriptionElement = null;
 
@@ -211,16 +218,41 @@ let maxFrontendReconnectRetries = 3;
 let frontendReconnectAttempts = 0;
 
 function updateTrafficIndicator(messageSize) {
-  receivedCharCount += messageSize;
-  const dots = Math.max(1, Math.min(MAX_DOTS, Math.floor((receivedCharCount / CHAR_THRESHOLD) * MAX_DOTS)));
-  const trafficElement = document.getElementById("text_stream");
-  if (trafficElement) {
-      trafficElement.textContent = '_'.repeat(dots);
+    receivedCharCount += messageSize;
+    
+    // Beregn antall "bølge-forekomster" (dots) basert på meldingens lengde
+    const dots = Math.max(1, Math.min(MAX_DOTS, Math.floor((receivedCharCount / CHAR_THRESHOLD) * MAX_DOTS)));
+    
+    const trafficElement = document.getElementById("text_stream");
+    if (trafficElement) {
+  +     // Øk waveIndex (slik at vi går til neste bølgesymbol ved hver melding)
+  +     waveIndex = (waveIndex + 1) % waveSymbols.length;
+  
+  +     // Hent nåværende bølgesymbol 
+  +     const symbol = waveSymbols[waveIndex];
+  
+  +     // Sett textContent til symbol gjentatt 'dots' ganger
+  +     trafficElement.textContent = symbol.repeat(dots);
+    }
+    
+    // Reset teller når vi når terskelen
+    if (receivedCharCount >= CHAR_THRESHOLD) {
+        receivedCharCount = 0;
+    }
   }
-  if (receivedCharCount >= CHAR_THRESHOLD) {
-      receivedCharCount = 0;
-  }
-}
+  
+
+// function updateTrafficIndicator(messageSize) {
+//   receivedCharCount += messageSize;
+//   const dots = Math.max(1, Math.min(MAX_DOTS, Math.floor((receivedCharCount / CHAR_THRESHOLD) * MAX_DOTS)));
+//   const trafficElement = document.getElementById("text_stream");
+//   if (trafficElement) {
+//       trafficElement.textContent = '_'.repeat(dots);
+//   }
+//   if (receivedCharCount >= CHAR_THRESHOLD) {
+//       receivedCharCount = 0;
+//   }
+// }
 
 // Oppdatert funksjon for meter-indikatoren med 150% av snitt som maks
 function updateMeterIndicator(currentLength) {
