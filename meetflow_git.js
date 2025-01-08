@@ -37,6 +37,8 @@ let waveLine = [];
 // Maks “bredde” = 6 kolonner, 
 // siden vi har 6 ulike symbolhøyder
 const waveLineMaxLength = 6;
+// For å beregne differanse i tegn
+let lastInterimLength = 0; // Hver gang vi får en INTERIM, lagrer vi dens length
 
 // Juster “normalisering” for meldingsstørrelse (se amplitudeIndexFromLength).
 const maxMsgLen = 300; // typisk maks lengde du vil se på
@@ -237,20 +239,35 @@ function amplitudeIndexFromLength(msgLen) {
     return amplitude; // en verdi 0..5
   }
 
-  function updateTrafficIndicator(messageSize) {
-    // 1) Finn amplitude i [0..5]
-    const amplitudeIdx = amplitudeIndexFromLength(messageSize);
+
+  function amplitudeIndexFromDiff(diff) {
+    // Vi antar at "diff" kan gå fra 0..(f.eks. 300) 
+    // Juster "maxDiff" til typisk maks økning i ett meldingstep
+    const maxDiff = 250; 
+    const clamped = Math.min(diff, maxDiff);
+    
+    // Mapper 0..maxDiff -> 0..(waveSymbols.length - 1)
+    const amplitude = Math.floor((clamped / maxDiff) * (waveSymbols.length - 1));
+    return amplitude; // 0..5
+  }
   
-    // 2) Legg inn kolonnen til høyre
+
+  function updateTrafficIndicator(diff) {
+    // Finn amplitude basert på differansen
+    const ampIdx = amplitudeIndexFromDiff(diff);
+  
+    // Skyv waveLine mot venstre om vi har 6 fra før
     if (waveLine.length >= waveLineMaxLength) {
-      // Fjern venstre kolonne (eldst)
       waveLine.shift();
     }
-    waveLine.push(amplitudeIdx);
   
-    // 3) Konverter waveLine -> en streng av symboler
+    // Legg inn ny kolonne
+    waveLine.push(ampIdx);
+  
+    // Tegn i #text_stream
     const trafficElement = document.getElementById("text_stream");
     if (trafficElement) {
+      // Konverter waveLine -> en streng
       const symbolLine = waveLine.map(idx => waveSymbols[idx]).join('');
       trafficElement.textContent = symbolLine;
     }
@@ -271,19 +288,23 @@ function amplitudeIndexFromLength(msgLen) {
 //   }
 // }
 
-// Oppdatert funksjon for meter-indikatoren med 150% av snitt som maks
 function updateMeterIndicator(currentLength) {
-  if (averageTranscriptionLength === 0) return;
+    if (averageTranscriptionLength === 0) return;
   
-  const adjustedMax = averageTranscriptionLength * 1.5;
-  const percentage = (currentLength / adjustedMax) * 100;
-  const meterLength = Math.floor((percentage / 100) * 120);
+    const adjustedMax = averageTranscriptionLength * 1.5;
+    const percentage = (currentLength / adjustedMax) * 100;
+    const meterLength = Math.floor((percentage / 100) * 120);
   
-  const meterElement = document.getElementById("text_meter");
-  if (meterElement) {
-      meterElement.textContent = '▁'.repeat(Math.min(120, Math.max(1, meterLength)));
+    const meterElement = document.getElementById("text_meter");
+    if (meterElement) {
+        // Eks.: bruk laveste wave-symbol i stedet for '_'
+        // meterElement.textContent = '▁'.repeat(Math.min(120, Math.max(1, meterLength)));
+  
+        // Eller behold underscore hvis du vil
+        meterElement.textContent = '_'.repeat(Math.min(120, Math.max(1, meterLength)));
+    }
   }
-}
+  
 
 // Function to ensure unique languages
 function ensureUniqueLanguages(languages) {
@@ -466,108 +487,136 @@ async function connectWebSocket(onSuccess, onFailure) {
 // Global flag to prevent multiple WebSocket closures
 let isWebSocketClosing = false;
 
-// Updated processMessage function
+
 async function processMessage(message) {
-  if (!isRecording) return;
-
-  // Validate message type
-  if (typeof message !== 'string') {
+    if (!isRecording) return;
+  
+    // Fjern spinner hvis første melding
+    const transcriptionElement = document.getElementById("par_transcription");
+    if (transcriptionElement && transcriptionElement.querySelector('.spinner-container')) {
+      transcriptionElement.innerHTML = "";
+    }
+  
+    // Valider at message faktisk er en string
+    if (typeof message !== 'string') {
       console.error(`Expected message to be a string but received type: ${typeof message}`);
-      console.warn(`Message content:`, message);
+      console.warn('Message content:', message);
       return;
-  }
-
-  const separatorIndex = message.indexOf(':');
-  if (separatorIndex === -1) {
+    }
+  
+    // Finn type og innhold ved å splitte på kolon
+    const separatorIndex = message.indexOf(':');
+    if (separatorIndex === -1) {
       console.warn(`Invalid message format: ${message}`);
       return;
-  }
-
-  const messageType = message.substring(0, separatorIndex).trim();
-  const messageContent = message.substring(separatorIndex + 1).trim();
-
-  console.log(`Received message type: ${messageType}, content length: ${messageContent.length}`);
-
-  // Add new case for handling maximum restarts error
-  if (messageType === 'ERROR' && messageContent.includes('Maximum streaming restarts reached')) {
+    }
+  
+    const messageType = message.substring(0, separatorIndex).trim();
+    const messageContent = message.substring(separatorIndex + 1).trim();
+  
+    console.log(`Received message type: ${messageType}, content length: ${messageContent.length}`);
+  
+    // Hvis melding er av typen ERROR med "Max streaming restarts"
+    if (messageType === 'ERROR' && messageContent.includes('Maximum streaming restarts reached')) {
       console.log('Maximum restarts reached. Initiating graceful shutdown...');
       await stopRecording();
       return;
-  }
-
-  // Update traffic indicator based on message content length
-  updateTrafficIndicator(messageContent.length);
-
-  // Handle different message types
-  switch(messageType) {
+    }
+  
+    // Oppdater "traffic indicator" eller "bølge" basert på differanse (under 'INTERIM')
+    // (Foreløpig kaller vi det i de riktige casene lenger ned.)
+  
+    switch (messageType) {
       case 'CLOUD_LIMIT_REACHED':
-          console.log('Cloud limit reached, starting new session');
-          try {
-              await startNewSession();
-          } catch (error) {
-              console.error('Error starting new session:', error);
-          }
-          break;
-
+        console.log('Cloud limit reached, starting new session');
+        try {
+          await startNewSession();
+        } catch (error) {
+          console.error('Error starting new session:', error);
+        }
+        break;
+  
       case 'FINAL':
-          {
-            const newLength = messageContent.length;
-            transcriptionLengths.push(newLength);
-            if (transcriptionLengths.length > 10) transcriptionLengths.shift();
-            averageTranscriptionLength = transcriptionLengths.reduce((a, b) => a + b, 0) / transcriptionLengths.length;
-
-            // Reset meter indicator
-            const meterElement = document.getElementById("text_meter");
-            if (meterElement) {
-                meterElement.textContent = '_';
-            }
-
-            finalTranscriptionText += messageContent + " ";
-            transcriptionText += messageContent + " ";
-            interimTranscriptionText = "";
-            lastTranscriptionLength = finalTranscriptionText.length;
-            console.log(`Updated finalTranscriptionText: ${finalTranscriptionText}`);
+        {
+          // 1) Oppdater statistikk for averageTranscriptionLength
+          const newLength = messageContent.length;
+          transcriptionLengths.push(newLength);
+          if (transcriptionLengths.length > 10) transcriptionLengths.shift();
+  
+          averageTranscriptionLength =
+            transcriptionLengths.reduce((a, b) => a + b, 0) / transcriptionLengths.length;
+  
+          // 2) Nullstill meter-linjen umiddelbart
+          const meterElement = document.getElementById("text_meter");
+          if (meterElement) {
+            meterElement.textContent = '_';
           }
-          break;
-
+  
+          // 3) Oppdater finalTranscriptionText
+          finalTranscriptionText += messageContent + " ";
+          transcriptionText += messageContent + " ";
+          interimTranscriptionText = "";
+          lastTranscriptionLength = finalTranscriptionText.length;
+  
+          // 4) NULLSTILL lastInterimLength for neste INTERIM
+          lastInterimLength = 0;
+  
+          console.log(`Updated finalTranscriptionText: ${finalTranscriptionText}`);
+        }
+        break;
+  
       case 'INTERIM':
-          {
-            interimTranscriptionText = messageContent;
-            const currentLength = messageContent.length;
-            updateMeterIndicator(currentLength);
-
-            console.log(`Updated interimTranscriptionText: ${interimTranscriptionText}`);
-          }
-          break;
-
+        {
+          // Oppdater interim-tekst
+          interimTranscriptionText = messageContent;
+          
+          // Finn differanse i antall tegn siden sist
+          const currentLength = messageContent.length;
+          const diff = Math.max(0, currentLength - lastInterimLength);
+  
+          // Oppdater trafficIndicator med differansen
+          updateTrafficIndicator(diff);
+  
+          // Oppdater meterIndicator med nåværende total-lengde
+          updateMeterIndicator(currentLength);
+  
+          // Oppdater lastInterimLength
+          lastInterimLength = currentLength;
+  
+          console.log(`Updated interimTranscriptionText: ${interimTranscriptionText}`);
+        }
+        break;
+  
       case 'GEMINI_FEEDBACK':
-          {
-            const currentTime = new Date().toLocaleTimeString();
-            suggestionsText = `______\nTime: ${currentTime}\n${messageContent}\n\n${suggestionsText}`;
-            console.log(`Updated suggestionsText: ${suggestionsText}`);
-          }
-          break;
-
+        {
+          const currentTime = new Date().toLocaleTimeString();
+          suggestionsText = `______\nTime: ${currentTime}\n${messageContent}\n\n${suggestionsText}`;
+  
+          console.log(`Updated suggestionsText: ${suggestionsText}`);
+        }
+        break;
+  
       case 'ERROR':
-          console.error(`WebSocket error: ${messageContent}`);
-          alert(`WebSocket error: ${messageContent}`);
-          break;
-
+        console.error(`WebSocket error: ${messageContent}`);
+        alert(`WebSocket error: ${messageContent}`);
+        break;
+  
       case 'STOP':
-          console.log(`Received STOP message from server: ${messageContent}`);
-          try {
-              await stopRecording();
-          } catch (error) {
-              console.error('Error stopping recording:', error);
-          }
-          break;
-
+        console.log(`Received STOP message from server: ${messageContent}`);
+        try {
+          await stopRecording();
+        } catch (error) {
+          console.error('Error stopping recording:', error);
+        }
+        break;
+  
       default:
-          console.warn(`Unknown message type: ${messageType}`);
-  }
-
-  // Update the UI after processing the message
-  updateWebflowUI();
+        console.warn(`Unknown message type: ${messageType}`);
+        break;
+    }
+  
+    // Til slutt: Oppdater UI etter at vi har behandlet meldingen
+    updateWebflowUI();
 }
 
 // Send summary request
