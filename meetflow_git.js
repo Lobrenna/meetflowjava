@@ -1122,6 +1122,29 @@ async function startNewSession() {
   }
 }
 
+
+function initializeUI() {
+    // 1) Sett start-knappen aktiv, stop-knappen inaktiv
+    const startLink = document.getElementById("link_start");
+    const stopLink = document.getElementById("link_stop");
+    
+    if (startLink) {
+      startLink.style.pointerEvents = "auto";
+      startLink.style.opacity = "1";    // Aktiv
+    }
+    if (stopLink) {
+      stopLink.style.pointerEvents = "none";
+      stopLink.style.opacity = "0.3";   // Inaktiv
+    }
+  
+    // 2) Vis en passiv melding i par_transcription (IKKE spinner)
+    transcriptionElement = document.getElementById("par_transcription");
+    if (transcriptionElement) {
+      transcriptionElement.innerHTML = "Click 'Start' to begin live transcription...";
+    }
+  }
+  
+
 // Event listeners when the window loads
 window.onload = async () => {
   console.log('Window loaded');
@@ -1170,6 +1193,8 @@ window.onload = async () => {
   }
 
   // updateWebflowUI();
+  // Kjør initializeUI for å sette korrekt start-/stop-tilstand
+  initializeUI();
 
   const startLink = document.getElementById("link_start");
   const stopLink = document.getElementById("link_stop");
