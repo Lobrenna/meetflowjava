@@ -603,110 +603,111 @@ async function getScreenStream() {
   }
 }
 
-// Start recording
 async function startRecording() {
-  console.log("Start recording triggered...");
-
-  transcriptionText = "";
-  interimTranscriptionText = "";
-  finalTranscriptionText = "";
-  suggestionsText = "";
-  referatText = "";
-
-  transcriptionElement = document.getElementById("par_transcription");
-  if (transcriptionElement) {
-      transcriptionElement.innerHTML = `
-          <div class="spinner-container">
-              <div class="summary-spinner"></div>
-              <span>Waiting for first transcription...</span>
-          </div>
-      `;
+    console.log("Start recording triggered...");
+  
+    transcriptionText = "";
+    interimTranscriptionText = "";
+    finalTranscriptionText = "";
+    suggestionsText = "";
+    referatText = "";
+  
+    // Legg til spinner i par_transcription
+    transcriptionElement = document.getElementById("par_transcription");
+    if (transcriptionElement) {
+        transcriptionElement.innerHTML = `
+            <div class="spinner-container">
+                <div class="summary-spinner"></div>
+                <span>Waiting for first transcription...</span>
+            </div>
+        `;
+    }
+  
+    clientId = generateUUID();
+  
+    const activePlanType = await checkUserPlan();
+    if (!activePlanType) {
+        console.error("User has no active plan. Aborting recording.");
+        return;
+    }
+  
+    if (!summaryType) {
+        alert("Please select a summary type in your settings.");
+        console.error("Summary type not selected. Aborting recording.");
+        return;
+    }
+  
+    const summaryElement = document.getElementById("par_summary");
+    const runElement = document.getElementById("par_run");
+    transcriptionElement = document.getElementById("par_transcription");
+    const suggestionsElement = document.getElementById("par_suggestions");
+  
+    if (summaryElement) summaryElement.innerHTML = "";
+    if (runElement) runElement.innerHTML = "";
+    if (transcriptionElement) transcriptionElement.innerHTML = "";
+    if (suggestionsElement) suggestionsElement.innerHTML = "";
+  
+    const currentStatus = await updateStatus();
+    if (currentStatus === "running") {
+        console.warn("Recording is already in progress.");
+        return;
+    }
+  
+    if (!selectedAudioDeviceName) {
+        console.log("No audio device selected. Requesting screen sharing with audio...");
+        await getScreenStream();
+        if (!screenStream) {
+            console.error('Screen stream not available. Cannot start recording.');
+            alert('Screen sharing was not started or audio was not shared. Recording cannot proceed.');
+            return;
+        }
+    } else {
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => track.stop());
+            screenStream = null;
+        }
+    }
+  
+    const initializationSuccess = await initializeSession();
+    if (!initializationSuccess) {
+        console.error("Session initialization failed. Aborting recording.");
+        return;
+    }
+  
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        console.log("WebSocket not connected. Connecting...");
+        await new Promise((resolve, reject) => {
+            connectWebSocket(
+                resolve,
+                () => {
+                    console.error("WebSocket failed to connect.");
+                    reject();
+                }
+            );
+        });
+    }
+  
+    const success = await initiateMediaRecording();
+    if (!success) {
+        console.error("Failed to initiate media recording.");
+        return;
+    }
+  
+    console.log("Recording successfully started.");
+    isRecording = true;
+  
+    const startLink = document.getElementById("link_start");
+    const stopLink = document.getElementById("link_stop");
+    if (startLink) {
+        startLink.style.pointerEvents = "none";
+        startLink.style.opacity = "0.3";
+    }
+    if (stopLink) {
+        stopLink.style.pointerEvents = "auto";
+        stopLink.style.opacity = "1";
+    }
   }
-
-  clientId = generateUUID();
-
-  const activePlanType = await checkUserPlan();
-  if (!activePlanType) {
-      console.error("User has no active plan. Aborting recording.");
-      return;
-  }
-
-  if (!summaryType) {
-      alert("Please select a summary type in your settings.");
-      console.error("Summary type not selected. Aborting recording.");
-      return;
-  }
-
-  const summaryElement = document.getElementById("par_summary");
-  const runElement = document.getElementById("par_run");
-  transcriptionElement = document.getElementById("par_transcription");
-  const suggestionsElement = document.getElementById("par_suggestions");
-
-  if (summaryElement) summaryElement.innerHTML = "";
-  if (runElement) runElement.innerHTML = "";
-  if (transcriptionElement) transcriptionElement.innerHTML = "";
-  if (suggestionsElement) suggestionsElement.innerHTML = "";
-
-  const currentStatus = await updateStatus();
-  if (currentStatus === "running") {
-      console.warn("Recording is already in progress.");
-      return;
-  }
-
-  if (!selectedAudioDeviceName) {
-      console.log("No audio device selected. Requesting screen sharing with audio...");
-      await getScreenStream();
-      if (!screenStream) {
-          console.error('Screen stream not available. Cannot start recording.');
-          alert('Screen sharing was not started or audio was not shared. Recording cannot proceed.');
-          return;
-      }
-  } else {
-      if (screenStream) {
-          screenStream.getTracks().forEach(track => track.stop());
-          screenStream = null;
-      }
-  }
-
-  const initializationSuccess = await initializeSession();
-  if (!initializationSuccess) {
-      console.error("Session initialization failed. Aborting recording.");
-      return;
-  }
-
-  if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-      console.log("WebSocket not connected. Connecting...");
-      await new Promise((resolve, reject) => {
-          connectWebSocket(
-              resolve,
-              () => {
-                  console.error("WebSocket failed to connect.");
-                  reject();
-              }
-          );
-      });
-  }
-
-  const success = await initiateMediaRecording();
-  if (!success) {
-      console.error("Failed to initiate media recording.");
-      return;
-  }
-
-  console.log("Recording successfully started.");
-  isRecording = true;
-
-  const startLink = document.getElementById("link_start");
-  const stopLink = document.getElementById("link_stop");
-  if (startLink) {
-      startLink.style.pointerEvents = "none";
-      startLink.style.opacity = "0.3";
-  }
-  if (stopLink) {
-      stopLink.style.pointerEvents = "auto";
-      stopLink.style.opacity = "1";
-  }
-}
+  
 
 // Function to find deviceId by label
 async function getDeviceIdByLabel(label) {
