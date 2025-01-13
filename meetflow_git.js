@@ -82,13 +82,11 @@ const planConfigurations = {
           'Patient Journal': 54
         },
         summaryOptions: [
-          'Cold call',
-          'Book meeting',
-          'B2B generic',
-          'B2B technical',
-          'Service product',
-          'Consumer product',
-          'Sales Manager Meeting'
+          'Simple note',
+          'Note specialist referral',
+          'SOAP note',
+          'Epikrise',
+          'Patient Journal'
         ]
       },
   sales_plans: {
