@@ -79,7 +79,7 @@ const planConfigurations = {
           'Note specialist referral': 51,
           'SOAP note': 52,
           'Epikrise': 53,
-          'Patient Journal': 54:
+          'Patient Journal': 54
         },
         summaryOptions: [
           'Cold call',
