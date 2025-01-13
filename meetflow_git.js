@@ -34,6 +34,7 @@ const status_url = `${base_url}/status`;
 
 // Define plan types and their corresponding plan IDs
 const planTypes = {
+  health_plans: ['pln_demohealth-2y42075x'],
   sales_plans: ['pln_demosales-dzgl0895'],
   demo_plans: [
     'pln_demo-g6i601oz',
@@ -72,6 +73,24 @@ const planTypes = {
 
 // Define configurations for each plan type
 const planConfigurations = {
+    health_plans: {
+        referatkode_mapping: {
+          'Simple note': 50,
+          'Note specialist referral': 51,
+          'SOAP note': 52,
+          'Epikrise': 53,
+          'Patient Journal': 54:
+        },
+        summaryOptions: [
+          'Cold call',
+          'Book meeting',
+          'B2B generic',
+          'B2B technical',
+          'Service product',
+          'Consumer product',
+          'Sales Manager Meeting'
+        ]
+      },
   sales_plans: {
     referatkode_mapping: {
       'Cold call': 10,
